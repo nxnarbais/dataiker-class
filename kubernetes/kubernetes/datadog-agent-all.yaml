@@ -1,0 +1,76 @@
+apiVersion: datadoghq.com/v2alpha1
+kind: DatadogAgent
+metadata:
+  name: datadog
+spec:
+  global:
+    clusterName: datadog-demo-app
+    tags:
+      - env:dev
+      - owner:narbais
+      - team:dd_class
+    credentials:
+      apiSecret:
+        secretName: datadog-secret
+        keyName: api-key
+    # The reason of the config below https://docs.datadoghq.com/agent/troubleshooting/hostname_containers/
+    kubelet:
+      tlsVerify: false
+  features:
+    logCollection:
+      enabled: true
+      containerCollectAll: true
+    liveProcessCollection:
+      enabled: true
+    liveContainerCollection:
+      enabled: true
+    processDiscovery:
+      enabled: true
+    oomKill:
+      enabled: true
+    tcpQueueLength:
+      enabled: true
+    ebpfCheck:
+      enabled: true
+    apm:
+      enabled: true
+    cspm:
+      enabled: true
+    cws:
+      enabled: true
+    npm:
+      enabled: true
+    usm:
+      enabled: true
+    dogstatsd:
+      unixDomainSocketConfig:
+        enabled: true
+    otlp:
+      receiver:
+        protocols:
+          grpc:
+            enabled: true
+    remoteConfiguration:
+      enabled: true
+    sbom:
+      enabled: true
+    eventCollection:
+      collectKubernetesEvents: true
+    orchestratorExplorer:
+      enabled: true
+    kubeStateMetricsCore:
+      enabled: true
+    admissionController:
+      enabled: true
+    # externalMetricsServer:
+    #   enabled: true
+    clusterChecks:
+      enabled: true
+    # prometheusScrape:
+    #   enabled: true
+
+  # override:
+  #   nodeAgent:
+  #     image:
+  #       name: agent
+  #       tag: 7.53.0

@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-deployment
+  labels:
+    app: frontend
+    tags.datadoghq.com/env: "dev"
+    tags.datadoghq.com/service: "frontend"
+    tags.datadoghq.com/version: "0.5.3"
+    project: front
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+        tags.datadoghq.com/env: "dev"
+        tags.datadoghq.com/service: "frontend"
+        tags.datadoghq.com/version: "0.5.3"
+        project: front
+      annotations:
+        ad.datadoghq.com/frontend.check_names: '["http_check"]'
+        ad.datadoghq.com/frontend.init_configs: '[{}]'
+        # https://docs.datadoghq.com/containers/guide/template_variables/
+        ad.datadoghq.com/frontend.instances: |
+          [
+            {
+              "name": "frontend",
+              "url": "http://%%host%%:%%port%%/health",
+              "tags": ["svc:frontend", "port:%%port%%", "agent_dummy_env:%%env_DD_DUMMY_ENV%%"]
+            }
+          ]
+        ad.datadoghq.com/frontend.logs: '[{"source":"fastify","service":"frontend"}]'
+    spec:
+      containers:
+      - name: frontend
+        image: node:16
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+          requests:
+            cpu: 200m
+            memory: 200Mi
+        env:
+          - name: DD_ENV
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['tags.datadoghq.com/env']
+          - name: DD_SERVICE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['tags.datadoghq.com/service']
+          - name: DD_VERSION
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['tags.datadoghq.com/version']
+          # - name: DD_TRACE_DEBUG
+          #   value: 'true'
+          - name: DD_AGENT_HOST
+            valueFrom:
+              fieldRef:
+                fieldPath: status.hostIP
+          # - name: DD_PROFILING_ENABLED
+          #   value: "true"
+          - name: DD_LOGS_INJECTION
+            value: "true"
+          - name: DD_TRACE_SAMPLE_RATE
+            value: "1"
+        ports:
+        - containerPort: 3000
+        workingDir: /home/node/app/frontend
+        # command: ["/bin/sh", "-ec", "sleep 1000"]
+        # command: ["/bin/sh", "-ec", "while :; do echo '.'; sleep 5 ; done"]
+        command: ["npm", "run", "start"]
+        volumeMounts:
+        - name: frontend-volume
+          mountPath: /home/node/app
+        - name: apmsocketpath
+          mountPath: /var/run/datadog     
+      volumes:
+      - name: frontend-volume
+        hostPath:
+          path: /app  # matches kind containerPath:
+      # - name: frontend-volume
+      #   persistentVolumeClaim:
+      #     claimName: pvc-app
+      - hostPath:
+          path: /var/run/datadog/
+        name: apmsocketpath
+---
+# https://minikube.sigs.k8s.io/docs/handbook/accessing/#using-minikube-tunnel
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+spec:
+  selector:
+    app: frontend
+  type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
+      nodePort: 30001

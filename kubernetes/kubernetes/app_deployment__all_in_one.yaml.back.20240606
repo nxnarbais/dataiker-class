@@ -1,0 +1,533 @@
+# ---
+# apiVersion: v1
+# kind: PersistentVolume
+# metadata:
+#   name: pv-app
+# spec:
+#   storageClassName: standard
+#   accessModes:
+#     - ReadWriteOnce
+#   capacity:
+#     storage: 1Gi
+#   hostPath:
+#     path: /app/
+# ---
+# apiVersion: v1
+# kind: PersistentVolumeClaim
+# metadata:
+#   name: pvc-app
+# spec:
+#   volumeName: pv-app
+#   accessModes:
+#     - ReadWriteOnce
+#   resources:
+#     requests:
+#       storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-deployment
+  labels:
+    app: frontend
+    tags.datadoghq.com/env: "dev"
+    tags.datadoghq.com/service: "frontend"
+    tags.datadoghq.com/version: "1.0.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+        tags.datadoghq.com/env: "dev"
+        tags.datadoghq.com/service: "frontend"
+        tags.datadoghq.com/version: "1.0.0"
+      annotations:
+        ad.datadoghq.com/frontend.logs: '[{"source":"fastify","service":"frontend"}]'
+    spec:
+      containers:
+      - name: frontend
+        image: node:16
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+          requests:
+            cpu: 200m
+            memory: 200Mi
+        env:
+          - name: DD_ENV
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['tags.datadoghq.com/env']
+          - name: DD_SERVICE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['tags.datadoghq.com/service']
+          - name: DD_VERSION
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['tags.datadoghq.com/version']
+          # - name: DD_TRACE_DEBUG
+          #   value: 'true'
+          - name: DD_AGENT_HOST
+            valueFrom:
+              fieldRef:
+                fieldPath: status.hostIP
+          - name: DD_PROFILING_ENABLED
+            value: "true"
+          - name: DD_LOGS_INJECTION
+            value: "true"
+          - name: DD_TRACE_SAMPLE_RATE
+            value: "1"
+        ports:
+        - containerPort: 3000
+        workingDir: /home/node/app/frontend
+        # command: ["/bin/sh", "-ec", "sleep 1000"]
+        # command: ["/bin/sh", "-ec", "while :; do echo '.'; sleep 5 ; done"]
+        command: ["npm", "run", "start"]
+        volumeMounts:
+        - name: frontend-volume
+          mountPath: /home/node/app
+        - name: apmsocketpath
+          mountPath: /var/run/datadog     
+      volumes:
+      - name: frontend-volume
+        hostPath:
+          path: /app  # matches kind containerPath:
+      # - name: frontend-volume
+      #   persistentVolumeClaim:
+      #     claimName: pvc-app
+      - hostPath:
+          path: /var/run/datadog/
+        name: apmsocketpath
+---
+# https://minikube.sigs.k8s.io/docs/handbook/accessing/#using-minikube-tunnel
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+spec:
+  selector:
+    app: frontend
+  type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
+      nodePort: 30001
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-catalog-deployment
+  labels:
+    app: product-catalog
+    tags.datadoghq.com/env: "dev"
+    tags.datadoghq.com/service: "product-catalog"
+    tags.datadoghq.com/version: "1.0.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: product-catalog
+  template:
+    metadata:
+      labels:
+        app: product-catalog
+        tags.datadoghq.com/env: "dev"
+        tags.datadoghq.com/service: "product-catalog"
+        tags.datadoghq.com/version: "1.0.0"
+      annotations:
+        ad.datadoghq.com/product-catalog.logs: '[{"source":"fastify","service":"product-catalog"}]'
+    spec:
+      containers:
+      - name: product-catalog
+        image: node:16
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+          requests:
+            cpu: 200m
+            memory: 200Mi
+        env:
+          - name: DD_ENV
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['tags.datadoghq.com/env']
+          - name: DD_SERVICE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['tags.datadoghq.com/service']
+          - name: DD_VERSION
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['tags.datadoghq.com/version']
+          # - name: DD_TRACE_DEBUG
+          #   value: 'true'
+          - name: DD_AGENT_HOST
+            valueFrom:
+              fieldRef:
+                fieldPath: status.hostIP
+          - name: DD_PROFILING_ENABLED
+            value: "true"
+          - name: DD_LOGS_INJECTION
+            value: "true"
+          - name: DD_TRACE_SAMPLE_RATE
+            value: "1"
+        ports:
+        - containerPort: 3000
+        workingDir: /home/node/app/product_catalog
+        command: ["npm", "run", "start"]
+        volumeMounts:
+        - mountPath: /home/node/app
+          name: product-catalog-volume
+        - name: apmsocketpath
+          mountPath: /var/run/datadog
+      volumes:
+      - name: product-catalog-volume
+        hostPath:
+          type: Directory
+          path: /app  # matches kind containerPath:
+      - hostPath:
+          path: /var/run/datadog/
+        name: apmsocketpath
+
+---
+# https://minikube.sigs.k8s.io/docs/handbook/accessing/#using-minikube-tunnel
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-catalog-service
+spec:
+  selector:
+    app: product-catalog
+  type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 3000
+      nodePort: 30002
+
+# ---
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: loadgenerator
+#   labels:
+#     app: loadgenerator
+# spec:
+#   selector:
+#     matchLabels:
+#       app: loadgenerator
+#   replicas: 1
+#   template:
+#     metadata:
+#       labels:
+#         app: loadgenerator
+#       # annotations:
+#       #   sidecar.istio.io/rewriteAppHTTPProbers: "true"
+#     spec:
+#       # serviceAccountName: loadgenerator
+#       # terminationGracePeriodSeconds: 5
+#       # restartPolicy: Always
+#       # securityContext:
+#       #   fsGroup: 1000
+#       #   runAsGroup: 1000
+#       #   runAsNonRoot: true
+#       #   runAsUser: 1000
+#       # initContainers:
+#       # - command:
+#       #   - /bin/sh
+#       #   - -exc
+#       #   - |
+#       #     MAX_RETRIES=12
+#       #     RETRY_INTERVAL=10
+#       #     for i in $(seq 1 $MAX_RETRIES); do
+#       #       echo "Attempt $i: Pinging frontend: ${FRONTEND_ADDR}..."
+#       #       STATUSCODE=$(wget --server-response http://${FRONTEND_ADDR} 2>&1 | awk '/^  HTTP/{print $2}')
+#       #       if [ $STATUSCODE -eq 200 ]; then
+#       #           echo "Frontend is reachable."
+#       #           exit 0
+#       #       fi
+#       #       echo "Error: Could not reach frontend - Status code: ${STATUSCODE}"
+#       #       sleep $RETRY_INTERVAL
+#       #     done
+#       #     echo "Failed to reach frontend after $MAX_RETRIES attempts."
+#       #     exit 1
+#       #   name: frontend-check
+#       #   securityContext:
+#       #     allowPrivilegeEscalation: false
+#       #     capabilities:
+#       #       drop:
+#       #         - ALL
+#       #     privileged: false
+#       #     readOnlyRootFilesystem: true
+#       #   image: busybox:latest
+#       #   env:
+#       #   - name: FRONTEND_ADDR
+#       #     # value: "frontend:80"
+#       #     value: "http://frontend-service.default.svc:3000"
+#       containers:
+#       - name: main
+#         image: python:3.12-bullseye
+#         # securityContext:
+#         #   allowPrivilegeEscalation: false
+#         #   capabilities:
+#         #     drop:
+#         #       - ALL
+#         #   privileged: false
+#         #   readOnlyRootFilesystem: true
+#         env:
+#         - name: FRONTEND_ADDR
+#           value: "http://frontend-service.default.svc:3000"
+#         - name: USERS
+#           value: "10"
+#         workingDir: /loadgen/loadgenerator
+#         command:
+#         - locust 
+#         - --host="http://${FRONTEND_ADDR}" 
+#         - --headless 
+#         - -u 
+#         - "${USERS:-10}" 
+#         - 2>&1
+#         volumeMounts:
+#         - mountPath: /loadgen
+#           name: loadgenerator-volume
+#         resources:
+#           requests:
+#             cpu: 300m
+#             memory: 256Mi
+#           limits:
+#             cpu: 500m
+#             memory: 512Mi
+#       volumes:
+#       - name: loadgenerator-volume
+#         hostPath:
+#           type: Directory
+#           path: /app  # matches kind containerPath:
+# ---
+# apiVersion: v1
+# kind: ServiceAccount
+# metadata:
+#   name: loadgenerator
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgenerator
+  labels:
+    app: loadgenerator
+spec:
+  selector:
+    matchLabels:
+      app: loadgenerator
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: loadgenerator
+    spec:
+      containers:
+      - name: main
+        image: locustio/locust
+        env:
+        - name: FRONTEND_ADDR
+          value: "http://frontend-service.default.svc:3000"
+        - name: USERS
+          value: "3"
+        workingDir: /loadgen/loadgenerator
+        command:
+        - locust
+        # - --host=http://frontend-service.default.svc:3000
+        - --host=$(FRONTEND_ADDR)
+        # - --host="${FRONTEND_ADDR}" 
+        - --headless 
+        - -u=$(USERS)
+        # - -u="${USERS:-10}" 
+        # - 2>&1
+        ports:
+        - containerPort: 8089
+        volumeMounts:
+        - mountPath: /loadgen
+          name: loadgenerator-volume
+        resources:
+          requests:
+            cpu: 300m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+      volumes:
+      - name: loadgenerator-volume
+        hostPath:
+          type: Directory
+          path: /app  # matches kind containerPath:
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-cache
+  labels:
+    app: user-cache
+  annotations:
+    ad.datadoghq.com/redis.checks: |
+      {
+        "redisdb": {
+          "init_config": {},
+          "instances": [
+            {
+              "host": "%%host%%",
+              "port":"6379",
+              "password":"%%env_REDIS_PASSWORD%%"
+            }
+          ]
+        }
+      }
+spec:
+  selector:
+    matchLabels:
+      app: user-cache
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: user-cache
+    spec:
+      containers:
+      - name: main
+        image: redis:7.0-alpine
+        ports:
+        - containerPort: 6379
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-cache-service
+spec:
+  selector:
+    app: user-cache
+  type: ClusterIP
+  ports:
+    - protocol: TCP
+      port: 6379
+      targetPort: 6379
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-manager-deployment
+  labels:
+    app: user-manager
+    tags.datadoghq.com/env: "dev"
+    tags.datadoghq.com/service: "user-manager"
+    tags.datadoghq.com/version: "1.0.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-manager
+  template:
+    metadata:
+      labels:
+        app: user-manager
+        tags.datadoghq.com/env: "dev"
+        tags.datadoghq.com/service: "user-manager"
+        tags.datadoghq.com/version: "1.0.0"
+      annotations:
+        ad.datadoghq.com/main.logs: '[{"source":"flask","service":"user-manager"}]'
+    spec:
+      containers:
+      - name: main
+        image: python:3.10-slim-buster
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+          requests:
+            cpu: 200m
+            memory: 200Mi
+        env:
+          - name: REDIS_HOST
+            # value: "user-cache-service.default.svc:6379"
+            value: "user-cache-service.default.svc"
+          - name: DD_ENV
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['tags.datadoghq.com/env']
+          - name: DD_SERVICE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['tags.datadoghq.com/service']
+          - name: DD_VERSION
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['tags.datadoghq.com/version']
+          # - name: DD_TRACE_DEBUG
+          #   value: 'true'
+          - name: DD_AGENT_HOST
+            valueFrom:
+              fieldRef:
+                fieldPath: status.hostIP
+          # - name: DD_PROFILING_ENABLED
+          #   value: "true"
+          - name: DD_LOGS_INJECTION
+            value: "true"
+          - name: DD_TRACE_SAMPLE_RATE
+            value: "1"
+        ports:
+        - containerPort: 8080
+        workingDir: /app/user-manager
+        # command: ["ddtrace-run", "python3", "-u" ,"main.py"]
+        # command: ["python3", "-u" ,"main.py"]
+        # command: ["pip", "install", "-r", "requirements.txt", "&&", "python3", "-u", "main.py"]
+        command: 
+        - sh
+        - "-c"
+        - |
+          /bin/bash <<'EOF'
+
+          # Normal script content possible here
+          echo "Hello world"
+          ls -l
+          pip3 install -r requirements.txt
+          pip3 install ddtrace
+          ddtrace-run python3 -u main.py
+
+          EOF
+        volumeMounts:
+        - name: user-manager-volume
+          mountPath: /app
+        - name: apmsocketpath
+          mountPath: /var/run/datadog     
+      volumes:
+      - name: user-manager-volume
+        hostPath:
+          path: /app  # matches kind containerPath:
+      - hostPath:
+          path: /var/run/datadog/
+        name: apmsocketpath
+
+---
+# https://minikube.sigs.k8s.io/docs/handbook/accessing/#using-minikube-tunnel
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-manager-service
+spec:
+  selector:
+    app: user-manager
+  type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      nodePort: 30003

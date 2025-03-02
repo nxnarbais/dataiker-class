@@ -1,0 +1,11 @@
+datadog:
+  apiKeyExistingSecret: datadog-secret
+  kubelet:
+    tlsVerify: false
+  apm:
+    instrumentation:
+      enabled: true
+  logs:
+    enabled: true
+    containerCollectAll: true
+

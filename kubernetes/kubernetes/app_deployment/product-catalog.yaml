@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-catalog-deployment
+  labels:
+    app: product-catalog
+    tags.datadoghq.com/env: "dev"
+    tags.datadoghq.com/service: "product-catalog"
+    tags.datadoghq.com/version: "0.2.0"
+    project: product
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: product-catalog
+  template:
+    metadata:
+      labels:
+        app: product-catalog
+        tags.datadoghq.com/env: "dev"
+        tags.datadoghq.com/service: "product-catalog"
+        tags.datadoghq.com/version: "0.2.0"
+        project: product
+      annotations:
+        ad.datadoghq.com/product-catalog.logs: '[{"source":"fastify","service":"product-catalog"}]'
+    spec:
+      containers:
+      - name: product-catalog
+        image: node:16
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+          requests:
+            cpu: 200m
+            memory: 200Mi
+        env:
+          - name: DD_ENV
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['tags.datadoghq.com/env']
+          - name: DD_SERVICE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['tags.datadoghq.com/service']
+          - name: DD_VERSION
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['tags.datadoghq.com/version']
+          # - name: DD_TRACE_DEBUG
+          #   value: 'true'
+          - name: DD_AGENT_HOST
+            valueFrom:
+              fieldRef:
+                fieldPath: status.hostIP
+          # - name: DD_PROFILING_ENABLED
+          #   value: "true"
+          - name: DD_LOGS_INJECTION
+            value: "true"
+          - name: DD_TRACE_SAMPLE_RATE
+            value: "1"
+        ports:
+        - containerPort: 3000
+        workingDir: /home/node/app/product_catalog
+        command: ["npm", "run", "start"]
+        volumeMounts:
+        - mountPath: /home/node/app
+          name: product-catalog-volume
+        - name: apmsocketpath
+          mountPath: /var/run/datadog
+      volumes:
+      - name: product-catalog-volume
+        hostPath:
+          type: Directory
+          path: /app  # matches kind containerPath:
+      - hostPath:
+          path: /var/run/datadog/
+        name: apmsocketpath
+
+---
+# https://minikube.sigs.k8s.io/docs/handbook/accessing/#using-minikube-tunnel
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-catalog-service
+spec:
+  selector:
+    app: product-catalog
+  type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 3000
+      nodePort: 30002

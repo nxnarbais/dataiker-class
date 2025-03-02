@@ -1,0 +1,97 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: user-cache-secret
+type: Opaque
+data:
+  # echo -n 'some_value' | base64
+  # echo -n 'abc' | base64 --decode
+  password: ZGF0YWRvZ3Bhc3N3b3Jk # datadogpassword
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: datadog-secret-reader
+  namespace: default
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["user-cache-secret"]
+    verbs: ["get", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: datadog-read-secrets
+  namespace: default
+subjects:
+  - kind: ServiceAccount
+    name: datadog-agent
+    apiGroup: ""
+    namespace: default
+roleRef:
+  kind: Role
+  name: datadog-secret-reader
+  apiGroup: ""
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-cache
+  labels:
+    app: user-cache
+    project: user-management
+spec:
+  selector:
+    matchLabels:
+      app: user-cache
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: user-cache
+        project: user-management
+      annotations:
+        # https://docs.datadoghq.com/containers/guide/template_variables/
+        # "password":"%%env_REDIS_PASSWORD%%"
+        # https://docs.datadoghq.com/agent/configuration/secrets-management/?tab=linux#read-from-kubernetes-secret-example
+        # The `ENC[]` handle must be the entire YAML value
+        ad.datadoghq.com/main.check_names: '["redisdb"]'
+        ad.datadoghq.com/main.init_configs: '[{}]'
+        ad.datadoghq.com/main.instances: |
+          [
+            {
+              "host": "%%host%%",
+              "port":"6379",
+              "password":"ENC[k8s_secret@default/user-cache-secret/password]"
+            }
+          ]
+        ad.datadoghq.com/main.logs: '[{"source":"redis","service":"user-manager-redis"}]'
+    spec:
+      containers:
+      - name: main
+        image: redis:7.0-alpine
+        ports:
+        - containerPort: 6379
+        command: ["redis-server", "/app/user-manager/redis.conf"]
+        volumeMounts:
+        - name: user-cache-volume
+          mountPath: /app
+      volumes:
+      - name: user-cache-volume
+        hostPath:
+          path: /app  # matches kind containerPath:
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-cache-service
+spec:
+  selector:
+    app: user-cache
+  type: ClusterIP
+  ports:
+    - protocol: TCP
+      port: 6379
+      targetPort: 6379

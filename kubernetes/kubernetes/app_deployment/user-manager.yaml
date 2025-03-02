@@ -1,0 +1,119 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-manager-deployment
+  labels:
+    app: user-manager
+    tags.datadoghq.com/env: "dev"
+    tags.datadoghq.com/service: "user-manager"
+    tags.datadoghq.com/version: "0.1.0"
+    project: user-management
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-manager
+  template:
+    metadata:
+      labels:
+        app: user-manager
+        tags.datadoghq.com/env: "dev"
+        tags.datadoghq.com/service: "user-manager"
+        tags.datadoghq.com/version: "0.1.0"
+        project: user-management
+      annotations:
+        ad.datadoghq.com/main.logs: '[{"source":"flask","service":"user-manager"}]'
+    spec:
+      containers:
+      - name: main
+        image: python:3.10-slim-buster
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+          requests:
+            cpu: 200m
+            memory: 200Mi
+        env:
+          - name: REDIS_HOST
+            value: "user-cache-service.default.svc"
+          - name: REDIS_PASSWORD
+            # value: "datadogpassword"
+            valueFrom:
+              secretKeyRef:
+                name: user-cache-secret
+                key: password
+          - name: DD_ENV
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['tags.datadoghq.com/env']
+          - name: DD_SERVICE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['tags.datadoghq.com/service']
+          - name: DD_VERSION
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['tags.datadoghq.com/version']
+          # - name: DD_TRACE_DEBUG
+          #   value: 'true'
+          - name: DD_AGENT_HOST
+            valueFrom:
+              fieldRef:
+                fieldPath: status.hostIP
+          - name: DD_PROFILING_ENABLED
+            value: "true"
+          - name: DD_LOGS_INJECTION
+            value: "true"
+          - name: DD_TRACE_SAMPLE_RATE
+            value: "1"
+          - name: DD_SERVICE_MAPPING
+            value: "redis:user-manager-redis"
+        ports:
+        - containerPort: 8080
+        workingDir: /app/user-manager
+        # command: ["ddtrace-run", "python3", "-u" ,"main.py"]
+        # command: ["python3", "-u" ,"main.py"]
+        # command: ["pip", "install", "-r", "requirements.txt", "&&", "python3", "-u", "main.py"]
+        command: 
+        - sh
+        - "-c"
+        - |
+          /bin/bash <<'EOF'
+
+          # Normal script content possible here
+          echo "Hello world"
+          ls -l
+          pip3 install -r requirements.txt
+          pip3 install ddtrace
+          ddtrace-run python3 -u main.py
+
+          EOF
+        volumeMounts:
+        - name: user-manager-volume
+          mountPath: /app
+        - name: apmsocketpath
+          mountPath: /var/run/datadog     
+      volumes:
+      - name: user-manager-volume
+        hostPath:
+          path: /app  # matches kind containerPath:
+      - hostPath:
+          path: /var/run/datadog/
+        name: apmsocketpath
+
+---
+# https://minikube.sigs.k8s.io/docs/handbook/accessing/#using-minikube-tunnel
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-manager-service
+spec:
+  selector:
+    app: user-manager
+  type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      nodePort: 30003

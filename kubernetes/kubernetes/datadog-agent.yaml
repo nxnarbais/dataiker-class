@@ -1,0 +1,45 @@
+apiVersion: datadoghq.com/v2alpha1
+kind: DatadogAgent
+metadata:
+  name: datadog
+spec:
+  global:
+    clusterName: datadog-demo-app
+    tags:
+      - env:dev
+      - owner:narbais
+      - team:dd_class
+    credentials:
+      apiSecret:
+        secretName: datadog-secret
+        keyName: api-key
+    # The reason of the config below https://docs.datadoghq.com/agent/troubleshooting/hostname_containers/
+    kubelet:
+      tlsVerify: false
+  features:
+    apm:
+      enabled: true
+      hostPortConfig:
+        enabled: true
+        hostPort: 8126
+    logCollection:
+      enabled: true
+      containerCollectAll: true
+
+  override:
+    nodeAgent:
+      # image:
+      #   name: agent
+      #   tag: 7.53.0
+      containers: 
+        agent: 
+          env:
+            # https://docs.datadoghq.com/agent/configuration/secrets-management/?tab=daemonset#multiple-providers-usage
+            - name: DD_SECRET_BACKEND_COMMAND
+              value: "/readsecret_multiple_providers.sh"
+            - name: DD_DUMMY_ENV
+              value: "dd_forever"
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi

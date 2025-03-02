@@ -1,0 +1,16 @@
+{
+  "name": "product_catalog",
+  "version": "1.0.0",
+  "description": "my product catalog",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dd-trace": "^5.14.1",
+    "fastify": "^4.27.0"
+  }
+}

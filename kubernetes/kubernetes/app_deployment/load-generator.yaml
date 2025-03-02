@@ -1,0 +1,51 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgenerator
+  labels:
+    app: loadgenerator
+    project: load-generator
+spec:
+  selector:
+    matchLabels:
+      app: loadgenerator
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: loadgenerator
+        project: load-generator
+    spec:
+      containers:
+      - name: main
+        image: locustio/locust
+        resources:
+          requests:
+            cpu: 300m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        env:
+        - name: FRONTEND_ADDR
+          value: "http://frontend-service.default.svc:3000"
+        - name: USERS
+          value: "1"
+        workingDir: /loadgen/loadgenerator
+        command:
+        - locust
+        - --host=$(FRONTEND_ADDR)
+        - --headless 
+        - -u=$(USERS)
+        # - 2>&1
+        ports:
+        - containerPort: 8089
+        volumeMounts:
+        - mountPath: /loadgen
+          name: loadgenerator-volume
+      volumes:
+      - name: loadgenerator-volume
+        hostPath:
+          type: Directory
+          path: /app  # matches kind containerPath:

@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-deploy
+  labels:
+    app: redis
+spec: 
+  replicas: 4
+  selector:
+    matchLabels:
+      app: redis
+  template: 
+    metadata:
+      labels:
+        app: redis
+      annotations:
+        ad.datadoghq.com/redis.checks: |
+          {
+            "redisdb": {
+              "init_config": {},
+              "instances": [
+                {
+                  "host": "%%host%%",
+                  "port":"6379"
+                }
+              ]
+            }
+          }
+        ad.datadoghq.com/redis.logs: '[{"source":"redis","service":"my_dummy_redis"}]'
+    spec:
+      containers:
+      - name: redis
+        image: redis:latest
+        ports:
+        - containerPort: 6379 
+      # nodeSelector:
+      #   role: worker

@@ -1,5 +1,10 @@
-Load Generator
-==============
+# Load Generator
+
+```bash
+locust -f locustfile.py
+```
+
+Go to http://0.0.0.0:8089/
 
 ## Dependencies
 

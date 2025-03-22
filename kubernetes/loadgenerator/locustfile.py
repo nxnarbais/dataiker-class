@@ -18,39 +18,41 @@ def name_generator():
 # 'Y3U'
 
 class HelloWorldUser(HttpUser):
+    host = service_frontend
+
     @task
     def hello_world(self):
-        self.client.get(service_frontend + "/")
+        self.client.get("/")
 
     @task
     def random_process(self):
-        self.client.get(service_frontend + "/random/process")
+        self.client.get("/random/process")
     
     @task
     def auth_pass(self):
-        self.client.get(service_frontend + "/auth/pass")
+        self.client.get("/auth/pass")
 
     @task
     def auth_fail(self):
-        self.client.get(service_frontend + "/auth/fail")
+        self.client.get("/auth/fail")
 
     @task
     def list_products(self):
-        self.client.get(service_frontend + "/list/products")
+        self.client.get("/list/products")
 
     @task
     def get_couch(self):
-        self.client.get(service_frontend + "/products/couch/1")
+        self.client.get("/products/couch/1")
     
     @task
     def get_users(self):
-        self.client.get(service_frontend + "/users")
+        self.client.get("/users")
     
     @task
     def create_users(self):
-        # self.client.get(service_frontend + "/users/new/" + id_generator())
-        self.client.get(service_frontend + "/users/new/" + name_generator())
+        # self.client.get("/users/new/" + id_generator())
+        self.client.get("/users/new/" + name_generator())
 
     @task
     def health(self):
-        self.client.get(service_frontend + "/health")
+        self.client.get("/health")

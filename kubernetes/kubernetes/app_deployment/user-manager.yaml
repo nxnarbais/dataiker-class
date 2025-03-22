@@ -84,8 +84,10 @@ spec:
           # Normal script content possible here
           echo "Hello world"
           ls -l
-          pip3 install -r requirements.txt
-          pip3 install ddtrace
+          pip install -r requirements.txt
+          pip install redis
+          pip install flask
+          pip install ddtrace
           ddtrace-run python3 -u main.py
 
           EOF

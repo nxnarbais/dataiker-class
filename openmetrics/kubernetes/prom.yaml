@@ -1,0 +1,102 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+data:
+  prometheus.yaml: |
+    # Paste the full contents of your prometheus.yaml file here
+    global:
+      scrape_interval:     15s
+      evaluation_interval: 15s
+
+    rule_files:
+      # - "first.rules"
+      # - "second.rules"
+
+    scrape_configs:
+      - job_name: prometheus
+        static_configs:
+          - targets: ['localhost:9090']
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dd-prometheus
+  labels:
+    app: dd-prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dd-prometheus
+  template:
+    metadata:
+      labels:
+        app: dd-prometheus
+      annotations:
+        ad.datadoghq.com/prometheus.checks: |
+          {
+            "openmetrics": {
+              "init_config": {},
+              "instances": [
+                {
+                  "openmetrics_endpoint": "http://%%host%%:9090/metrics",
+                  "namespace": "hist_",
+                  "metrics": ["go_gc_heap_frees_by_size_bytes","prometheus_http_requests", "prometheus_target_metadata_cache_bytes"],
+                  "collect_histogram_buckets": true,
+                  "non_cumulative_histogram_buckets": false,
+                  "histogram_buckets_as_distributions": false,
+                  "collect_counters_with_distributions": false
+                },
+                {
+                  "openmetrics_endpoint": "http://%%host%%:9090/metrics",
+                  "namespace": "histnc_",
+                  "metrics": ["go_gc_heap_frees_by_size_bytes","prometheus_http_requests", "prometheus_target_metadata_cache_bytes"],
+                  "collect_histogram_buckets": true,
+                  "non_cumulative_histogram_buckets": true,
+                  "histogram_buckets_as_distributions": false,
+                  "collect_counters_with_distributions": false
+                },
+                {
+                  "openmetrics_endpoint": "http://%%host%%:9090/metrics",
+                  "namespace": "distrib_",
+                  "metrics": ["go_gc_heap_frees_by_size_bytes","prometheus_http_requests", "prometheus_target_metadata_cache_bytes"],
+                  "collect_histogram_buckets": true,
+                  "non_cumulative_histogram_buckets": true,
+                  "histogram_buckets_as_distributions": true,
+                  "collect_counters_with_distributions": true
+                }
+              ]
+            }
+          }
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/prometheus/prometheus.yaml
+              subPath: prometheus.yaml
+      volumes:
+        - name: config-volume
+          configMap:
+            name: prometheus-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dd-prometheus
+  labels:
+    app: dd-prometheus
+spec:
+  selector:
+    app: dd-prometheus
+  type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 9090
+      targetPort: 9090
+      nodePort: 30123

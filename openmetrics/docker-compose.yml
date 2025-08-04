@@ -19,16 +19,72 @@ services:
       start_period: 40s
     restart: unless-stopped
     labels:
-      - "prometheus.io/scrape=true"
-      - "prometheus.io/port=3000"
-      - "prometheus.io/path=/metrics"
-      - "com.datadoghq.ad.check_names=[\"openmetrics\"]"
-      - "com.datadoghq.ad.init_configs=[{}]"
-      - "com.datadoghq.ad.instances=[{\"openmetrics_endpoint\":\"http://%%host%%:3000/metrics\",\"namespace\":\"openmetrics_app\",\"metrics\":[\"http_requests_total\",\"http_request_duration_seconds\",\"active_connections\",\"custom_operations_total\",\"memory_usage_bytes\"]}]"
-      - "com.datadoghq.ad.logs=[{\"source\":\"nodejs\",\"service\":\"openmetrics-app\"}]"
+      prometheus.io/scrape: 'true'
+      prometheus.io/port: '3000'
+      prometheus.io/path: '/metrics'
+      com.datadoghq.ad.logs: '[{"source":"nodejs","service":"openmetrics-app"}]'
+      # com.datadoghq.ad.check_names: '["openmetrics"]'
+      # com.datadoghq.ad.init_configs: '[{}]'
+      # com.datadoghq.ad.instances: '[{"openmetrics_endpoint":"http://%%host%%:3000/metrics","namespace":"openmetrics_app","metrics":[".*"]}]'
+      # com.datadoghq.ad.instances: '[{"openmetrics_endpoint":"http://%%host%%:3000/metrics","namespace":"openmetrics_app","metrics":["http_requests.*","active_connections","custom_operations","memory_usage_bytes"]}]'
+      # com.datadoghq.ad.instances: |
+      #   [
+      #     {
+      #       "openmetrics_endpoint": "http://%%host%%:3000/metrics",
+      #       "namespace": "openmetrics_app",
+      #       "metrics": [
+      #         "http_requests.*",
+      #         "active_connections", 
+      #         "custom_operations",
+      #         "memory_usage_bytes"
+      #       ]
+      #     }
+      #   ]
+      com.datadoghq.ad.check_names: '["openmetrics","openmetrics","openmetrics"]'
+      com.datadoghq.ad.init_configs: '[{},{},{}]'
+      com.datadoghq.ad.instances: |
+        [
+          {
+            "openmetrics_endpoint": "http://%%host%%:3000/metrics",
+            "namespace": "openmetrics_app",
+            "collect_histogram_buckets": true,
+            "metrics": [
+              "http_request.*",
+              "active_connections", 
+              "custom_operations",
+              "memory_usage_bytes"
+            ]
+          },
+          {
+            "openmetrics_endpoint": "http://%%host%%:3000/metrics",
+            "namespace": "openmetrics_app_nc",
+            "collect_histogram_buckets": true,
+            "non_cumulative_histogram_buckets": true,
+            "metrics": [
+              "http_request.*",
+              "active_connections", 
+              "custom_operations",
+              "memory_usage_bytes"
+            ]
+          },
+          {
+            "openmetrics_endpoint": "http://%%host%%:3000/metrics",
+            "namespace": "openmetrics_app_nc_dist",
+            "collect_histogram_buckets": true,
+            "non_cumulative_histogram_buckets": true,
+            "histogram_buckets_as_distributions": true,
+            "metrics": [
+              "http_request.*",
+              "active_connections", 
+              "custom_operations",
+              "memory_usage_bytes"
+            ]
+          }
+        ]
 
   # Datadog Agent
   datadog-agent:
+    container_name: dd-agent
     image: gcr.io/datadoghq/agent:latest
     environment:
       - DD_SITE=${DD_SITE:-datadoghq.com}
@@ -55,21 +111,3 @@ services:
     restart: unless-stopped
     depends_on:
       - openmetrics-app
-
-  # Optional: Add Prometheus for testing metrics collection
-  prometheus:
-    image: prom/prometheus:latest
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=200h'
-      - '--web.enable-lifecycle'
-    restart: unless-stopped
-    depends_on:
-      - openmetrics-app 

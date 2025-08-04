@@ -1,5 +1,12 @@
 import express from 'express';
-import { getMetrics, activeConnections, customCounter } from './metrics';
+import { 
+  getMetrics, 
+  activeConnections, 
+  customCounter, 
+  customOperationDuration, 
+  dataProcessingTime,
+  updateResponseTimeGauge 
+} from './metrics';
 import { metricsMiddleware } from './middleware';
 
 const app = express();
@@ -39,28 +46,49 @@ app.get('/', (req, res) => {
 });
 
 app.get('/demo', (req, res) => {
-  // Simulate some work
+  // Simulate some work with histogram
+  const startTime = Date.now();
   setTimeout(() => {
+    const duration = (Date.now() - startTime) / 1000;
     customCounter.inc({ operation_type: 'demo_request' });
+    customOperationDuration.observe({ operation_type: 'demo_request' }, duration);
+    
     res.json({ 
       message: 'Demo endpoint called',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      duration: duration
     });
   }, Math.random() * 1000);
 });
 
 app.post('/api/data', (req, res) => {
-  customCounter.inc({ operation_type: 'data_creation' });
-  res.json({ 
-    message: 'Data created successfully',
-    data: req.body
-  });
+  const startTime = Date.now();
+  
+  // Simulate data processing
+  setTimeout(() => {
+    const processingTime = (Date.now() - startTime) / 1000;
+    
+    customCounter.inc({ operation_type: 'data_creation' });
+    dataProcessingTime.observe({ data_type: 'json' }, processingTime);
+    
+    res.json({ 
+      message: 'Data created successfully',
+      data: req.body,
+      processing_time: processingTime
+    });
+  }, Math.random() * 500 + 100); // 100-600ms processing time
 });
 
-// Simulate active connections
+// Simulate active connections and update response time gauges
 setInterval(() => {
   const connections = Math.floor(Math.random() * 10) + 1;
   activeConnections.set(connections);
+  
+  // Update response time gauges for different endpoints
+  updateResponseTimeGauge('health', Math.random() * 0.1);
+  updateResponseTimeGauge('metrics', Math.random() * 0.5);
+  updateResponseTimeGauge('demo', Math.random() * 1.0);
+  updateResponseTimeGauge('api_data', Math.random() * 0.3);
 }, 5000);
 
 // Error handling middleware
